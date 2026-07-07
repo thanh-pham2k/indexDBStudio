@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "IndexedDB Query Studio",
+  "version": "1.0.0",
+  "description": "SQL-like query and inline editor for IndexedDB databases.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "IndexedDB Studio",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "devtools_page": "devtools.html"
+}

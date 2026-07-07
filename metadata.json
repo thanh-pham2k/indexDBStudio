@@ -1,0 +1,6 @@
+{
+  "name": "IndexedDB Query Studio",
+  "description": "SQL-like querying, inline editing, snapshot rollback, and data exporting tool for IndexedDB databases.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
