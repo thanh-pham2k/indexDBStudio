@@ -1,10 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { GridRow } from '../../shared/message-types';
-import { Key, Edit2, Check, X, FileSpreadsheet, Plus, CornerDownRight, ArrowRightLeft } from 'lucide-react';
+import { Key, Edit2, Check, X, FileSpreadsheet, Plus, CornerDownRight, ArrowRightLeft, Braces, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function ResultGrid() {
   const [isVerticalView, setIsVerticalView] = useState(false);
+  const [viewingJsonRow, setViewingJsonRow] = useState<GridRow | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
+
   const {
     queryResult,
     selectedRow,
@@ -24,6 +28,11 @@ export default function ResultGrid() {
   const [newRowValues, setNewRowValues] = useState<Record<string, string>>({});
 
   const editInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset pagination when queryResult changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [queryResult]);
 
   // Focus input automatically when editing starting
   useEffect(() => {
@@ -108,6 +117,9 @@ export default function ResultGrid() {
     setNewRowValues({});
   };
 
+  const totalPages = Math.ceil(queryResult.length / pageSize) || 1;
+  const paginatedData = queryResult.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   if (queryResult.length === 0) {
     return (
       <div className={`flex-1 flex flex-col items-center justify-center bg-slate-950 border border-slate-900 rounded-lg p-6 text-slate-500 ${layoutMode === 'vertical' ? 'h-1/2 min-h-0' : 'h-full'}`}>
@@ -129,7 +141,7 @@ export default function ResultGrid() {
             ({queryResult.length} rows returned)
           </span>
           <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded ml-1">
-            Double click a cell to edit
+            Double click a row to view JSON
           </span>
         </div>
 
@@ -176,18 +188,23 @@ export default function ResultGrid() {
                   Field (Transposed)
                 </th>
                 {/* Records headers */}
-                {queryResult.map((row, rowIdx) => {
+                {paginatedData.map((row, rowIdx) => {
                   const isSelected = selectedRow?.__key === row.__key;
                   return (
                     <th
                       key={String(row.__key)}
                       onClick={() => setSelectedRow(row)}
+                      onDoubleClick={() => {
+                        setSelectedRow(row);
+                        setViewingJsonRow(row);
+                      }}
                       className={`p-2 font-semibold border-r border-slate-800 cursor-pointer text-center truncate hover:bg-slate-800/50 ${
                         isSelected ? 'bg-indigo-950/40 text-indigo-300 ring-2 ring-indigo-500 ring-inset' : 'text-slate-400 bg-slate-900'
                       }`}
                       style={{ minWidth: '150px', width: '200px' }}
+                      title="Double-click to view JSON"
                     >
-                      Record #{rowIdx + 1}
+                      Record #{(currentPage - 1) * pageSize + rowIdx + 1}
                     </th>
                   );
                 })}
@@ -209,7 +226,7 @@ export default function ResultGrid() {
                     </td>
 
                     {/* Subsequent cells: value of this field for each record */}
-                    {queryResult.map((row) => {
+                    {paginatedData.map((row) => {
                       const isSelected = selectedRow?.__key === row.__key;
                       const cellVal = row.__value[col] !== undefined ? row.__value[col] : row[col];
                       const isEditing = editingCell?.rowKey === row.__key && editingCell?.field === col;
@@ -235,8 +252,14 @@ export default function ResultGrid() {
                       return (
                         <td
                           key={String(row.__key)}
-                          onClick={() => setSelectedRow(row)}
-                          onDoubleClick={() => handleCellDoubleClick(row, col)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedRow(row);
+                          }}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            handleCellDoubleClick(row, col);
+                          }}
                           className={`p-2 border-r border-slate-900 relative group/cell truncate hover:bg-slate-900/40 cursor-pointer ${
                             isSelected ? 'bg-indigo-950/20 text-indigo-100' : ''
                           } ${isEditing ? 'p-1' : ''}`}
@@ -369,18 +392,23 @@ export default function ResultGrid() {
                 </tr>
               )}
 
-              {queryResult.map((row, rowIdx) => {
+              {paginatedData.map((row, rowIdx) => {
                 const isSelected = selectedRow?.__key === row.__key;
                 return (
                   <tr
                     key={String(row.__key)}
                     onClick={() => setSelectedRow(row)}
+                    onDoubleClick={() => {
+                      setSelectedRow(row);
+                      setViewingJsonRow(row);
+                    }}
                     className={`hover:bg-slate-900/40 cursor-pointer group ${
                       isSelected ? 'bg-indigo-950/30 text-indigo-100 border-l-2 border-l-indigo-500' : ''
                     }`}
+                    title="Double-click to view JSON"
                   >
                     <td className="p-2 text-center text-slate-500 border-r border-slate-900 bg-slate-950 sticky left-0 group-hover:text-slate-300">
-                      {rowIdx + 1}
+                      {(currentPage - 1) * pageSize + rowIdx + 1}
                     </td>
                     
                     {columns.map(col => {
@@ -409,7 +437,10 @@ export default function ResultGrid() {
                       return (
                         <td
                           key={col}
-                          onDoubleClick={() => handleCellDoubleClick(row, col)}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation(); // prevent row double click
+                            handleCellDoubleClick(row, col);
+                          }}
                           className={`p-2 border-r border-slate-900 relative group/cell truncate ${
                             isEditing ? 'p-1' : ''
                           } ${isPK ? 'font-semibold text-slate-200' : ''}`}
@@ -501,6 +532,74 @@ export default function ResultGrid() {
             >
               Submit Record
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Pagination Bar */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/80 border-t border-slate-800 text-xs text-slate-400 shrink-0 sticky bottom-0 z-10">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-300 cursor-pointer"
+              title="Previous Page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="font-medium text-slate-300 font-mono text-[10px]">
+              Page {currentPage} of {totalPages}
+            </span>
+
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-300 cursor-pointer"
+              title="Next Page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="text-[10px] text-slate-500">
+            Showing {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, queryResult.length)} of {queryResult.length} rows
+          </div>
+        </div>
+      )}
+
+      {/* JSON Viewer Modal for row double-click */}
+      {viewingJsonRow && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-[100]">
+          <div className="bg-slate-900 border border-slate-800 rounded-lg w-full max-w-3xl h-[80vh] shadow-2xl flex flex-col overflow-hidden">
+            <div className="px-4 py-3 bg-slate-950/60 border-b border-slate-800 flex items-center justify-between shrink-0">
+              <span className="font-bold text-white flex items-center gap-1.5 text-sm">
+                <Braces className="w-4 h-4 text-violet-400" />
+                Raw JSON Document Data
+              </span>
+              <button
+                onClick={() => setViewingJsonRow(null)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 p-4 bg-slate-950 overflow-y-auto">
+              <pre className="font-mono text-xs text-slate-300">
+                {JSON.stringify(viewingJsonRow.__value, null, 2)}
+              </pre>
+            </div>
+
+            <div className="px-5 py-3 bg-slate-950/40 border-t border-slate-800 flex justify-end shrink-0">
+              <button
+                onClick={() => setViewingJsonRow(null)}
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
