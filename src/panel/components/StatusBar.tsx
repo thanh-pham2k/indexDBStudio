@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Terminal, Database, Clock, History, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Terminal, Database, Clock, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export default function StatusBar() {
   const {
@@ -8,7 +8,6 @@ export default function StatusBar() {
     selectedStore,
     queryResult,
     executionTimeMs,
-    snapshots,
     error,
     successMessage,
     clearError,
@@ -69,11 +68,6 @@ export default function StatusBar() {
         <div className="flex items-center gap-1">
           <Clock className="w-3.5 h-3.5" />
           <span>Speed: <strong className="text-slate-300">{executionTimeMs}ms</strong></span>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <History className="w-3.5 h-3.5" />
-          <span>Snapshots: <strong className="text-slate-300">{snapshots.length}</strong></span>
         </div>
       </div>
     </div>

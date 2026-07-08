@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { 
   Trash2, 
-  Copy, 
+
   Save, 
   AlertTriangle, 
   Braces, 
   Check,
-  Clipboard
+  Clipboard,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 export default function JsonDetailPanel() {
@@ -15,7 +17,6 @@ export default function JsonDetailPanel() {
     selectedRow,
     updateRecordInStore,
     deleteRecordInStore,
-    cloneRecordInStore,
     layoutMode
   } = useAppStore();
 
@@ -23,6 +24,7 @@ export default function JsonDetailPanel() {
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Sync selected record with textarea when selection changes
   useEffect(() => {
@@ -56,11 +58,6 @@ export default function JsonDetailPanel() {
     }
   };
 
-  const handleClone = () => {
-    if (!selectedRow) return;
-    cloneRecordInStore(selectedRow);
-  };
-
   const handleBeautify = () => {
     try {
       const parsed = JSON.parse(jsonText);
@@ -78,12 +75,21 @@ export default function JsonDetailPanel() {
   };
 
   return (
-    <div className={`bg-slate-950 border border-slate-900 rounded-lg flex flex-col overflow-hidden ${layoutMode === 'vertical' ? 'w-full h-1/2 min-h-0' : 'w-80 h-full'}`}>
+    <div className={`bg-slate-950 border border-slate-900 rounded-lg flex flex-col overflow-hidden transition-all duration-200 z-50 ${isExpanded ? 'fixed inset-4 shadow-2xl' : layoutMode === 'vertical' ? 'w-full h-1/2 min-h-0' : 'w-80 h-full'}`}>
       {/* Panel Tab headers */}
-      <div className="flex border-b border-slate-900 text-xs font-semibold select-none bg-slate-900/40 shrink-0">
-        <div className="flex-1 py-2 px-3 text-slate-300 flex items-center gap-1.5 bg-slate-900/60">
+      <div className="flex border-b border-slate-900 text-xs font-semibold select-none bg-slate-900/40 shrink-0 justify-between items-center">
+        <div className="py-2 px-3 text-slate-300 flex items-center gap-1.5 bg-slate-900/60">
           <Braces className="w-3.5 h-3.5 text-violet-400" />
           <span>RECORD DETAIL</span>
+        </div>
+        <div className="px-2">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            title={isExpanded ? "Collapse panel" : "Expand panel"}
+            className="text-slate-400 hover:text-slate-100 cursor-pointer p-1"
+          >
+            {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
         </div>
       </div>
 
@@ -92,15 +98,6 @@ export default function JsonDetailPanel() {
           <div className="flex-1 flex flex-col gap-3 min-h-0">
             {/* Action buttons */}
             <div className="flex gap-1.5 shrink-0">
-              <button
-                onClick={handleClone}
-                title="Copy Record (Duplicate in database)"
-                className="flex-1 py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-800 transition text-[11px] font-medium flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Copy className="w-3.5 h-3.5 text-indigo-400" />
-                Copy
-              </button>
-              
               <button
                 onClick={handleDelete}
                 title="Delete Record"
