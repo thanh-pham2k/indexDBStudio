@@ -86,7 +86,7 @@ export function parseSqlQuery(queryStr: string): ParsedQuery {
       const opIndex = part.indexOf(opMatch[1]);
       
       const field = part.substring(0, opIndex).trim();
-      let rawVal = part.substring(opIndex + opMatch[1].length).trim().replace(/;$/, '');
+      let rawVal = part.substring(opIndex + opMatch[1].length).trim().replace(/;$/, '').trim();
       
       // Parse value
       let value: string | number | boolean | null = rawVal;

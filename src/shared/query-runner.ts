@@ -29,10 +29,18 @@ function matchesConditions(record: any, conditions: Condition[]): boolean {
     // Compare values
     switch (operator) {
       case '=':
-        if (String(recordVal).toLowerCase() !== String(value).toLowerCase()) return false;
+        if (typeof recordVal === 'string' && typeof value === 'string') {
+          if (recordVal.toLowerCase() !== value.toLowerCase()) return false;
+        } else {
+          if (recordVal !== value) return false;
+        }
         break;
       case '!=':
-        if (String(recordVal).toLowerCase() === String(value).toLowerCase()) return false;
+        if (typeof recordVal === 'string' && typeof value === 'string') {
+          if (recordVal.toLowerCase() === value.toLowerCase()) return false;
+        } else {
+          if (recordVal === value) return false;
+        }
         break;
       case '>':
         if (!(recordVal > value)) return false;
