@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Play, Sparkles, Save, Info, RefreshCw, Layers } from 'lucide-react';
+import { Play, Sparkles, Save, RefreshCw, Layers, Keyboard } from 'lucide-react';
 
 function getStoreNameFromQuery(query: string): string | null {
   const match = query.match(/\bfrom\s+([^\s;]+)/i);
@@ -42,6 +42,14 @@ export default function QueryEditor() {
     store => store.storeName.toLowerCase() === sourceStoreName?.toLowerCase()
   );
   const fieldNames = sourceStoreMeta?.fields || activeStoreMeta?.fields || [];
+
+  const getFieldsForQuery = (query: string): string[] => {
+    const queryStoreName = getStoreNameFromQuery(query);
+    const queryStoreMeta = activeDbMeta?.stores.find(
+      store => store.storeName.toLowerCase() === queryStoreName?.toLowerCase()
+    );
+    return queryStoreMeta?.fields || activeStoreMeta?.fields || [];
+  };
 
   // Monitor clicks outside suggestions to close them
   useEffect(() => {
@@ -139,6 +147,9 @@ export default function QueryEditor() {
 
     const selectionStart = e.target.selectionStart;
     const beforeCursor = val.substring(0, selectionStart);
+    // Use the latest textarea value instead of the previous Zustand render.
+    // This matters when a complete query is pasted before typing WHERE.
+    const queryFieldNames = getFieldsForQuery(val);
     
     // Check what is right before the cursor for autocompletion.
     const lastWordMatch = beforeCursor.match(/[\w_]+$/);
@@ -155,15 +166,24 @@ export default function QueryEditor() {
       // the table named in FROM, even when the toolbar table is different.
       const clauseMatch = beforeCursor.match(/\b(select|where|and|order\s+by)\b([\s\S]*)$/i);
       if (clauseMatch) {
+        const clauseName = clauseMatch[1].toLowerCase().replace(/\s+/g, ' ');
         const clauseText = clauseMatch[2];
         const hasOperator = /(?:<=|>=|!=|=|>|<|\bcontains\b|\blike\b)/i.test(clauseText);
-        const hasLaterClause = /\b(from|limit)\b/i.test(clauseText);
+        const hasLaterClause = /\b(from|where|and|order\s+by|limit)\b/i.test(clauseText);
         const fieldTokenMatch = clauseText.match(/[\w_]*$/);
         const fieldToken = fieldTokenMatch?.[0]?.toLowerCase() || '';
 
-        if (!hasOperator && !hasLaterClause) {
-          activeSuggestions = fieldNames.filter(name => name.toLowerCase().includes(fieldToken));
+        // SELECT, WHERE, AND and ORDER BY all use fields from the FROM table.
+        // Do not offer fields after SELECT has already moved into FROM or a
+        // later clause; in that position the user should get SQL keywords.
+        if (['select', 'where', 'and', 'order by'].includes(clauseName) && !hasOperator && !hasLaterClause) {
+          activeSuggestions = queryFieldNames.filter(name => name.toLowerCase().includes(fieldToken));
         }
+      }
+
+      // After a completed FROM table, offer the next SQL clauses as well.
+      if (activeSuggestions.length === 0 && /\bfrom\s+[^\s;]+\s+$/i.test(beforeCursor)) {
+        activeSuggestions = ['WHERE', 'ORDER BY', 'LIMIT'];
       }
 
       if (activeSuggestions.length === 0 && lastWord && lastWord.length >= 2) {
@@ -245,10 +265,10 @@ export default function QueryEditor() {
       {/* Editor Header / Toolbars */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-950/80 border-b border-slate-800 text-xs font-medium text-slate-400">
         <div className="flex items-center gap-2">
-          <Layers className="w-3.5 h-3.5 text-indigo-400" />
-          <span>QUERY EDITOR</span>
-          <span className="text-[10px] bg-slate-800 text-indigo-300 px-1.5 py-0.5 rounded font-mono">
-            Ctrl+Enter to run
+          <Layers className="w-3.5 h-3.5 text-indigo-400" title="Query editor" />
+          <span className="sr-only">QUERY EDITOR</span>
+          <span className="text-[10px] bg-slate-800 text-indigo-300 px-1.5 py-0.5 rounded font-mono" title="Ctrl+Enter to run">
+            <Keyboard className="w-3 h-3" aria-label="Keyboard shortcuts" />
           </span>
         </div>
         
@@ -256,10 +276,10 @@ export default function QueryEditor() {
           <button
             onClick={handleFormatQuery}
             title="Ctrl+Shift+F"
+            aria-label="Format query (Ctrl+Shift+F)"
             className="px-2 py-1 rounded bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white transition flex items-center gap-1 cursor-pointer"
           >
             <Sparkles className="w-3 h-3 text-amber-400" />
-            Format
           </button>
           
           <button
@@ -268,15 +288,17 @@ export default function QueryEditor() {
               setSaveNameModal(true);
             }}
             title="Ctrl+S"
+            aria-label="Save query (Ctrl+S)"
             className="px-2 py-1 rounded bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white transition flex items-center gap-1 cursor-pointer"
           >
             <Save className="w-3 h-3 text-blue-400" />
-            Save
           </button>
           
           <button
             onClick={runQuery}
             disabled={executing}
+            title="Run query (Ctrl+Enter)"
+            aria-label="Run query (Ctrl+Enter)"
             className={`px-3 py-1 rounded font-bold flex items-center gap-1 transition cursor-pointer ${
               executing 
                 ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
@@ -288,7 +310,6 @@ export default function QueryEditor() {
             ) : (
               <Play className="w-3.5 h-3.5 fill-current" />
             )}
-            Run
           </button>
         </div>
       </div>

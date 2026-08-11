@@ -136,7 +136,9 @@ export function parseSqlQuery(queryStr: string): ParsedQuery {
   }
   
   // Extract LIMIT
-  let limit = 100; // Default limit
+  // No LIMIT means all matching records. An explicit LIMIT is still capped
+  // below to keep intentionally bounded queries safe.
+  let limit = Number.POSITIVE_INFINITY;
   if (limitIdx !== -1) {
     const limitPart = cleanQuery.substring(limitIdx + 7).trim().replace(/;$/, '');
     const parsedLimit = parseInt(limitPart, 10);

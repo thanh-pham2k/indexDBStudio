@@ -1,16 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { exportToJSON, exportToCSV } from '../../shared/export-utils';
 import {
   Database,
   RefreshCw,
-  Download,
+  FileJson,
+  FileSpreadsheet,
   HelpCircle,
   Chrome,
   Terminal,
   Search,
   BookOpen,
-  X
+  X,
+  ChevronDown,
+  Check,
+  Undo2,
+  Redo2
 } from 'lucide-react';
 
 export default function Toolbar() {
@@ -22,19 +27,37 @@ export default function Toolbar() {
     setSelectedStore,
     refreshMetadata,
     queryResult,
-    isMetaLoading
+    isMetaLoading,
+    undoStack,
+    redoStack,
+    historyBusy,
+    undo,
+    redo
   } = useAppStore();
 
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showExtensionModal, setShowExtensionModal] = useState(false);
   const [copiedTextId, setCopiedTextId] = useState<string | null>(null);
   const [storeSearch, setStoreSearch] = useState('');
+  const [isStorePickerOpen, setIsStorePickerOpen] = useState(false);
+  const storePickerRef = useRef<HTMLDivElement>(null);
 
   const activeDbMeta = databases.find(d => d.dbName === selectedDb);
   const stores = activeDbMeta?.stores || [];
   const filteredStores = stores.filter(store =>
     store.storeName.toLowerCase().includes(storeSearch.trim().toLowerCase())
   );
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (storePickerRef.current && !storePickerRef.current.contains(event.target as Node)) {
+        setIsStorePickerOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleExportJSON = () => {
     if (queryResult.length === 0) return;
@@ -99,15 +122,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       {/* DB Selection & Metadata Actions */}
       <div className="flex items-center gap-3">
         {/* DB selection */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" title="Select database">
           <Database className="w-4 h-4 text-indigo-400 shrink-0" />
-          <span className="font-semibold text-slate-300 text-xs uppercase tracking-wider font-mono">DATABASE:</span>
           <select
             id="db-select-dropdown"
+            aria-label="Select database"
             className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono"
             value={selectedDb}
             onChange={e => {
               setStoreSearch('');
+              setIsStorePickerOpen(false);
               setSelectedDb(e.target.value);
             }}
           >
@@ -119,34 +143,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           </select>
         </div>
 
-        {/* Store selection and search */}
+        {/* Searchable table selector */}
         {stores.length > 0 && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5" ref={storePickerRef}>
             <span className="text-slate-500 font-mono text-xs">/</span>
-            <div className="relative flex items-center">
-              <Search className="absolute left-2 w-3 h-3 text-slate-500 pointer-events-none" />
-              <input
-                id="store-search-input"
-                type="search"
-                value={storeSearch}
-                onChange={e => setStoreSearch(e.target.value)}
-                placeholder="Search table..."
-                aria-label="Search tables in the selected database"
-                className="w-32 bg-slate-950 border border-slate-800 rounded pl-6 pr-2 py-1 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono placeholder:text-slate-600"
-              />
+            <div className="relative">
+              <button
+                id="store-select-dropdown"
+                type="button"
+                onClick={() => setIsStorePickerOpen(open => !open)}
+                aria-haspopup="listbox"
+                aria-expanded={isStorePickerOpen}
+                className="min-w-44 max-w-64 bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-indigo-300 outline-none focus:border-indigo-500 font-mono flex items-center justify-between gap-3"
+              >
+                <span className="truncate">{selectedStore || 'Select table'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${isStorePickerOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isStorePickerOpen && (
+                <div className="absolute left-0 top-full mt-1 z-[60] w-64 rounded border border-slate-700 bg-slate-950 shadow-xl overflow-hidden">
+                  <div className="relative border-b border-slate-800 p-1.5">
+                    <Search className="absolute left-3 top-2.5 w-3 h-3 text-slate-500 pointer-events-none" />
+                    <input
+                      id="store-search-input"
+                      type="search"
+                      value={storeSearch}
+                      onChange={e => setStoreSearch(e.target.value)}
+                      placeholder=""
+                      aria-label="Search tables in the selected database"
+                      autoFocus
+                      className="w-full bg-slate-900 border border-slate-800 rounded pl-6 pr-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono placeholder:text-slate-600"
+                    />
+                  </div>
+
+                  <div className="max-h-52 overflow-y-auto py-1" role="listbox" aria-label="Tables">
+                    {filteredStores.length > 0 ? filteredStores.map(store => (
+                      <button
+                        key={store.storeName}
+                        type="button"
+                        role="option"
+                        aria-selected={selectedStore === store.storeName}
+                        onClick={() => {
+                          setSelectedStore(store.storeName);
+                          setStoreSearch('');
+                          setIsStorePickerOpen(false);
+                        }}
+                        className={`w-full px-2.5 py-1.5 text-left text-xs font-mono flex items-center justify-between gap-2 transition cursor-pointer ${
+                          selectedStore === store.storeName
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-indigo-300 hover:bg-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <span className="truncate">{store.storeName} ({store.count} rows)</span>
+                        {selectedStore === store.storeName && <Check className="w-3.5 h-3.5 shrink-0" />}
+                      </button>
+                    )) : (
+                      <div className="px-2.5 py-2 text-xs text-slate-500 font-mono">No tables found</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-            <select
-              id="store-select-dropdown"
-              className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-indigo-300 outline-none focus:border-indigo-500 font-mono"
-              value={selectedStore}
-              onChange={e => setSelectedStore(e.target.value)}
-            >
-              {filteredStores.map(store => (
-                <option key={store.storeName} value={store.storeName}>
-                  {store.storeName} ({store.count} rows)
-                </option>
-              ))}
-            </select>
           </div>
         )}
 
@@ -159,6 +216,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isMetaLoading ? 'animate-spin' : ''}`} />
         </button>
+
+        <div className="flex items-center gap-1 border-l border-slate-800 pl-2 ml-1">
+          <button
+            onClick={undo}
+            disabled={historyBusy || undoStack.length === 0}
+            title="Undo last record change"
+            aria-label="Undo last record change"
+            className="p-1.5 rounded bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Undo2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={redo}
+            disabled={historyBusy || redoStack.length === 0}
+            title="Redo last undone record change"
+            aria-label="Redo last undone record change"
+            className="p-1.5 rounded bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Redo2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Export / Developers Hub / Help Actions */}
@@ -167,37 +245,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         <button
           onClick={handleExportJSON}
           disabled={queryResult.length === 0}
+          title="Export JSON"
+          aria-label="Export JSON"
           className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 cursor-pointer border ${
             queryResult.length === 0
               ? 'border-slate-800 text-slate-600 cursor-not-allowed'
               : 'border-slate-800 hover:border-slate-700 bg-slate-850 hover:bg-slate-800 text-slate-300 transition'
           }`}
         >
-          <Download className="w-3.5 h-3.5 text-blue-400" />
-          Export JSON
+          <FileJson className="w-4 h-4 text-blue-400" />
         </button>
 
         {/* Export CSV */}
         <button
           onClick={handleExportCSV}
           disabled={queryResult.length === 0}
+          title="Export CSV"
+          aria-label="Export CSV"
           className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 cursor-pointer border ${
             queryResult.length === 0
               ? 'border-slate-800 text-slate-600 cursor-not-allowed'
               : 'border-slate-800 hover:border-slate-700 bg-slate-850 hover:bg-slate-800 text-slate-300 transition'
           }`}
         >
-          <Download className="w-3.5 h-3.5 text-emerald-400" />
-          Export CSV
+          <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
         </button>
 
         {/* Chrome Extension unpacked installer hub */}
         <button
           onClick={() => setShowExtensionModal(true)}
+          title="Extension Hub"
+          aria-label="Extension Hub"
           className="px-2.5 py-1 rounded text-xs font-bold bg-indigo-950/40 text-indigo-300 hover:bg-indigo-900/40 border border-indigo-800 transition flex items-center gap-1 cursor-pointer"
         >
           <Chrome className="w-3.5 h-3.5 text-indigo-400" />
-          Extension Hub
         </button>
 
         {/* Help Info Button */}
@@ -231,7 +312,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 <h4 className="font-bold text-indigo-300 mb-1">Supported SQL Syntax</h4>
                 <div className="bg-slate-950 p-2.5 rounded font-mono text-slate-300 leading-relaxed space-y-1.5">
                   <p className="text-emerald-400">-- Query All:</p>
-                  <p>SELECT * FROM store_name LIMIT 100;</p>
+                  <p>SELECT * FROM store_name;</p>
                   <p className="text-emerald-400">-- Filter & Sort:</p>
                   <p>SELECT * FROM store_name</p>
                   <p>WHERE SYNC_STATUS = 'PENDING' AND IS_SYNC = 0</p>

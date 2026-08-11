@@ -3,16 +3,39 @@ import { useAppStore } from './panel/store/useAppStore';
 import Toolbar from './panel/components/Toolbar';
 import QueryEditor from './panel/components/QueryEditor';
 import ResultGrid from './panel/components/ResultGrid';
-import StatusBar from './panel/components/StatusBar';
 import { Terminal, Bookmark } from 'lucide-react';
 
 export default function App() {
-  const { refreshMetadata, savedQueries, setCurrentQuery } = useAppStore();
+  const { refreshMetadata, savedQueries, setCurrentQuery, undo, redo } = useAppStore();
 
   useEffect(() => {
     // Initial scan and demo database seeding
     refreshMetadata();
   }, [refreshMetadata]);
+
+  useEffect(() => {
+    const handleHistoryShortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+
+      const target = event.target as HTMLElement | null;
+      const isEditable = target instanceof HTMLInputElement
+        || target instanceof HTMLTextAreaElement
+        || target?.isContentEditable;
+      if (isEditable) return;
+
+      const key = event.key.toLowerCase();
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        void undo();
+      } else if (key === 'y' || (key === 'z' && event.shiftKey)) {
+        event.preventDefault();
+        void redo();
+      }
+    };
+
+    document.addEventListener('keydown', handleHistoryShortcut);
+    return () => document.removeEventListener('keydown', handleHistoryShortcut);
+  }, [redo, undo]);
 
   return (
     <div id="app-root-container" className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-4 gap-3 select-none">
@@ -75,8 +98,6 @@ export default function App() {
         <ResultGrid />
       </main>
 
-      {/* Footer / Dev status info */}
-      <StatusBar />
     </div>
   );
 }

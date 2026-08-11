@@ -1,7 +1,15 @@
 import { create } from 'zustand';
-import { DbMetadata, GridRow, StoreMetadata } from '../../shared/message-types';
+import { DbMetadata, GridRow, Snapshot, StoreMetadata } from '../../shared/message-types';
 import { scanAllMetadata, updateCell, updateRecord, deleteRecord, addRecord, getRecord } from '../../shared/indexeddb-adapter';
 import { executeQuery } from '../../shared/query-runner';
+
+const MAX_HISTORY_ENTRIES = 100;
+
+function cloneValue<T>(value: T): T {
+  if (value === undefined || value === null) return value;
+  if (typeof structuredClone === 'function') return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
 
 interface AppStoreState {
   databases: DbMetadata[];
@@ -16,6 +24,9 @@ interface AppStoreState {
   successMessage: string | null;
   savedQueries: { id: string; name: string; db: string; query: string }[];
   isMetaLoading: boolean;
+  undoStack: Snapshot[];
+  redoStack: Snapshot[];
+  historyBusy: boolean;
 
   // Actions
   refreshMetadata: () => Promise<void>;
@@ -30,6 +41,8 @@ interface AppStoreState {
   setSelectedRow: (row: GridRow | null) => void;
   saveQuery: (name: string) => void;
   deleteSavedQuery: (id: string) => void;
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
   clearError: () => void;
   clearSuccess: () => void;
   layoutMode: 'horizontal' | 'vertical';
@@ -49,6 +62,9 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   successMessage: null,
   savedQueries: [],
   isMetaLoading: false,
+  undoStack: [],
+  redoStack: [],
+  historyBusy: false,
   layoutMode: (localStorage.getItem('indexeddb_studio_layout_mode') as 'horizontal' | 'vertical') || 'vertical',
 
   refreshMetadata: async () => {
@@ -79,7 +95,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       // If query is empty, set a beautiful default query
       let nextQuery = get().currentQuery;
       if (!nextQuery && nextStore) {
-        nextQuery = `SELECT *\nFROM ${nextStore}\nLIMIT 100;`;
+        nextQuery = `SELECT *\nFROM ${nextStore};`;
       }
 
       // Load saved queries
@@ -106,7 +122,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       const preferredStore = dbMeta.stores.find(s => s.storeName === 'PF_DAILY_MOVEMENT_REPORT');
       nextStore = preferredStore ? preferredStore.storeName : dbMeta.stores[0].storeName;
     }
-    const defaultQuery = nextStore ? `SELECT *\nFROM ${nextStore}\nLIMIT 100;` : '';
+    const defaultQuery = nextStore ? `SELECT *\nFROM ${nextStore};` : '';
     set({
       selectedDb: dbName,
       selectedStore: nextStore,
@@ -118,7 +134,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   },
 
   setSelectedStore: (storeName: string) => {
-    const defaultQuery = `SELECT *\nFROM ${storeName}\nLIMIT 100;`;
+    const defaultQuery = `SELECT *\nFROM ${storeName};`;
     set({
       selectedStore: storeName,
       currentQuery: defaultQuery,
@@ -168,17 +184,32 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     const { __key, __dbName, __storeName, __keyPath, __value } = row;
     set({ error: null });
     try {
-      // 2. Perform IndexedDB write
       await updateCell(__dbName, __storeName, __key, __keyPath, fieldName, value);
-
 
       set({
         successMessage: `Successfully updated field "${fieldName}"`
       });
 
-      // 4. Re-run current query to show updated data
       await get().runQuery();
       await get().refreshMetadata();
+
+      const newValue = cloneValue(__value);
+      newValue[fieldName] = cloneValue(value);
+      const snapshot: Snapshot = {
+        id: `snapshot_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        dbName: __dbName,
+        storeName: __storeName,
+        key: cloneValue(__key),
+        keyPath: cloneValue(__keyPath),
+        oldValue: cloneValue(__value),
+        newValue,
+        action: 'UPDATE_CELL',
+        changedAt: new Date().toISOString()
+      };
+      set(state => ({
+        undoStack: [...state.undoStack, snapshot].slice(-MAX_HISTORY_ENTRIES),
+        redoStack: []
+      }));
     } catch (e: any) {
       set({ error: `Update Failed: ${e.message}` });
     }
@@ -188,17 +219,29 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     const { __key, __dbName, __storeName, __keyPath, __value } = row;
     set({ error: null });
     try {
-      // 2. Perform IndexedDB write
       await updateRecord(__dbName, __storeName, __key, __keyPath, value);
-
 
       set({
         successMessage: `Successfully updated full record`
       });
 
-      // 4. Re-run current query to show updated data
       await get().runQuery();
       await get().refreshMetadata();
+      const snapshot: Snapshot = {
+        id: `snapshot_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        dbName: __dbName,
+        storeName: __storeName,
+        key: cloneValue(__key),
+        keyPath: cloneValue(__keyPath),
+        oldValue: cloneValue(__value),
+        newValue: cloneValue(value),
+        action: 'UPDATE_RECORD',
+        changedAt: new Date().toISOString()
+      };
+      set(state => ({
+        undoStack: [...state.undoStack, snapshot].slice(-MAX_HISTORY_ENTRIES),
+        redoStack: []
+      }));
       return true;
     } catch (e: any) {
       set({ error: `Update Failed: ${e.message}` });
@@ -210,18 +253,29 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     const { __key, __dbName, __storeName, __keyPath, __value } = row;
     set({ error: null });
     try {
-      // 2. Perform IndexedDB deletion
       await deleteRecord(__dbName, __storeName, __key);
-
 
       set({
         selectedRow: null,
         successMessage: `Record deleted successfully`
       });
 
-      // 4. Re-run current query
       await get().runQuery();
       await get().refreshMetadata();
+      const snapshot: Snapshot = {
+        id: `snapshot_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        dbName: __dbName,
+        storeName: __storeName,
+        key: cloneValue(__key),
+        keyPath: cloneValue(__keyPath),
+        oldValue: cloneValue(__value),
+        action: 'DELETE_RECORD',
+        changedAt: new Date().toISOString()
+      };
+      set(state => ({
+        undoStack: [...state.undoStack, snapshot].slice(-MAX_HISTORY_ENTRIES),
+        redoStack: []
+      }));
       return true;
     } catch (e: any) {
       set({ error: `Deletion Failed: ${e.message}` });
@@ -274,6 +328,85 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
     const filtered = savedQueries.filter(q => q.id !== id);
     localStorage.setItem('indexeddb_studio_saved_queries', JSON.stringify(filtered));
     set({ savedQueries: filtered, successMessage: 'Saved query deleted' });
+  },
+
+  undo: async () => {
+    const { undoStack, historyBusy } = get();
+    const snapshot = undoStack[undoStack.length - 1];
+    if (!snapshot || historyBusy) return;
+
+    set({ historyBusy: true, error: null });
+    try {
+      if (snapshot.action === 'DELETE_RECORD') {
+        await updateRecord(
+          snapshot.dbName,
+          snapshot.storeName,
+          snapshot.key,
+          snapshot.keyPath,
+          cloneValue(snapshot.oldValue)
+        );
+      } else if (snapshot.action === 'UPDATE_CELL' || snapshot.action === 'UPDATE_RECORD') {
+        await updateRecord(
+          snapshot.dbName,
+          snapshot.storeName,
+          snapshot.key,
+          snapshot.keyPath,
+          cloneValue(snapshot.oldValue)
+        );
+      } else if (snapshot.action === 'ADD_RECORD') {
+        await deleteRecord(snapshot.dbName, snapshot.storeName, snapshot.key);
+      }
+
+      await get().runQuery();
+      await get().refreshMetadata();
+      set(state => ({
+        undoStack: state.undoStack.slice(0, -1),
+        redoStack: [...state.redoStack, snapshot].slice(-MAX_HISTORY_ENTRIES),
+        successMessage: 'Undo completed'
+      }));
+    } catch (e: any) {
+      set({ error: `Undo Failed: ${e.message}` });
+    } finally {
+      set({ historyBusy: false });
+    }
+  },
+
+  redo: async () => {
+    const { redoStack, historyBusy } = get();
+    const snapshot = redoStack[redoStack.length - 1];
+    if (!snapshot || historyBusy) return;
+
+    set({ historyBusy: true, error: null });
+    try {
+      if (snapshot.action === 'DELETE_RECORD') {
+        await deleteRecord(snapshot.dbName, snapshot.storeName, snapshot.key);
+      } else if (snapshot.action === 'UPDATE_CELL' || snapshot.action === 'UPDATE_RECORD') {
+        if (snapshot.newValue === undefined) {
+          throw new Error('Redo data is missing for this update.');
+        }
+        await updateRecord(
+          snapshot.dbName,
+          snapshot.storeName,
+          snapshot.key,
+          snapshot.keyPath,
+          cloneValue(snapshot.newValue)
+        );
+      } else if (snapshot.action === 'ADD_RECORD') {
+        await addRecord(snapshot.dbName, snapshot.storeName, cloneValue(snapshot.newValue));
+      }
+
+      await get().runQuery();
+      await get().refreshMetadata();
+      set(state => ({
+        redoStack: state.redoStack.slice(0, -1),
+        undoStack: [...state.undoStack, snapshot].slice(-MAX_HISTORY_ENTRIES),
+        successMessage: 'Redo completed'
+      }));
+    } catch (e: any) {
+      set({ error: `Redo Failed: ${e.message}` });
+    } finally {
+      set({ historyBusy: false });
+    }
   },
 
   clearError: () => set({ error: null }),

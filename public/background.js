@@ -307,10 +307,17 @@ async function tabAddRecord(dbName, storeName, recordValue) {
 async function tabExecuteQuery(dbName, parsedQuery) {
   const { selectFields, storeName, where, orderBy, limit } = parsedQuery;
 
+  function getFieldValue(record, field) {
+    return field.split('.').reduce((current, part) => {
+      if (current === undefined || current === null) return undefined;
+      return current[part];
+    }, record);
+  }
+
   function matchesConditions(record, conditions) {
     for (const cond of conditions) {
       const { field, operator, value } = cond;
-      const recordVal = record[field];
+      const recordVal = getFieldValue(record, field);
 
       if (value === null) {
         if (operator === '=') {
@@ -349,7 +356,9 @@ async function tabExecuteQuery(dbName, parsedQuery) {
           break;
         case 'CONTAINS':
         case 'LIKE':
-          const strVal = String(recordVal).toLowerCase();
+          const strVal = typeof recordVal === 'object'
+            ? JSON.stringify(recordVal).toLowerCase()
+            : String(recordVal).toLowerCase();
           const searchVal = String(value).toLowerCase().replace(/%/g, '');
           if (!strVal.includes(searchVal)) return false;
           break;

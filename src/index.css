@@ -1,1 +1,63 @@
 @import "tailwindcss";
+
+/* Brighter DevTools-inspired surface without losing the focused dark theme. */
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #0f172a;
+}
+
+#app-root-container {
+  background:
+    radial-gradient(circle at 8% 0%, rgba(99, 102, 241, 0.16), transparent 30%),
+    linear-gradient(145deg, #111827 0%, #1e293b 100%) !important;
+}
+
+#app-root-container > header,
+#app-root-container > footer {
+  filter: drop-shadow(0 8px 18px rgba(2, 6, 23, 0.12));
+}
+
+#app-root-container [class~="bg-slate-900"] {
+  background-color: rgba(30, 41, 59, 0.94) !important;
+}
+
+#app-root-container [class~="bg-slate-950"] {
+  background-color: rgba(15, 23, 42, 0.96) !important;
+}
+
+#app-root-container [class~="bg-slate-900/60"],
+#app-root-container [class~="bg-slate-900/80"] {
+  background-color: rgba(51, 65, 85, 0.88) !important;
+}
+
+#app-root-container [class~="bg-slate-950/40"],
+#app-root-container [class~="bg-slate-950/60"],
+#app-root-container [class~="bg-slate-950/80"] {
+  background-color: rgba(15, 23, 42, 0.88) !important;
+}
+
+#app-root-container [class~="border-slate-800"] {
+  border-color: rgba(100, 116, 139, 0.42) !important;
+}
+
+#app-root-container [class~="border-slate-900"] {
+  border-color: rgba(71, 85, 105, 0.5) !important;
+}
+
+#app-root-container [class~="text-slate-400"] {
+  color: #cbd5e1 !important;
+}
+
+#app-root-container [class~="text-slate-500"] {
+  color: #a8b5c7 !important;
+}
+
+#app-root-container [class~="text-slate-600"] {
+  color: #8999ae !important;
+}

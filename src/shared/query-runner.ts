@@ -8,7 +8,10 @@ import { runInInspectedWindow } from './indexeddb-adapter';
 function matchesConditions(record: any, conditions: Condition[]): boolean {
   for (const cond of conditions) {
     const { field, operator, value } = cond;
-    const recordVal = record[field];
+    const recordVal = field.split('.').reduce((current, part) => {
+      if (current === undefined || current === null) return undefined;
+      return current[part];
+    }, record);
 
     if (value === null) {
       if (operator === '=') {
@@ -56,7 +59,11 @@ function matchesConditions(record: any, conditions: Condition[]): boolean {
         break;
       case 'CONTAINS':
       case 'LIKE':
-        const strVal = String(recordVal).toLowerCase();
+        // LIKE/CONTAINS should also search nested object values such as
+        // { address: { city: "Ho Chi Minh" } } rather than "[object Object]".
+        const strVal = typeof recordVal === 'object'
+          ? JSON.stringify(recordVal).toLowerCase()
+          : String(recordVal).toLowerCase();
         const searchVal = String(value).toLowerCase().replace(/%/g, ''); // strip wildcard symbols for simple matching
         if (!strVal.includes(searchVal)) return false;
         break;

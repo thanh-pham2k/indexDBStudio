@@ -9,8 +9,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Clipboard,
+  Edit3,
   FileSpreadsheet,
   Key,
+  MousePointer2,
+  Save,
+  Trash2,
   X
 } from 'lucide-react';
 
@@ -132,16 +136,14 @@ export default function ResultGrid() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-slate-950 border border-slate-900 rounded-lg overflow-hidden min-h-0">
+    <div className="flex-1 min-h-0 flex flex-col bg-slate-950 border border-slate-900 rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/60 border-b border-slate-800 text-xs text-slate-400 shrink-0">
         <div className="flex items-center gap-1.5">
-          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="font-medium text-slate-300">RESULT SET</span>
-          <span className="text-[10px] text-slate-500">({queryResult.length} rows returned)</span>
+          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" title="Query results" />
+          <span className="sr-only">RESULT SET</span>
+          <span className="text-[10px] text-slate-500" title={`${queryResult.length} rows returned`}>({queryResult.length})</span>
           {queryResult.length > 0 && (
-            <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded ml-1">
-              Double-click a row to view or edit JSON
-            </span>
+            <MousePointer2 className="w-3.5 h-3.5 text-slate-500 ml-1" title="Double-click a row to view or edit JSON" />
           )}
         </div>
 
@@ -150,6 +152,7 @@ export default function ResultGrid() {
             onClick={handleCopyAll}
             disabled={queryResult.length === 0}
             title="Copy all query result records as formatted JSON"
+            aria-label="Copy all query result records as formatted JSON"
             className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer ${
               queryResult.length === 0
                 ? 'border-slate-800 text-slate-600 cursor-not-allowed'
@@ -159,13 +162,13 @@ export default function ResultGrid() {
             }`}
           >
             {copied ? <Check className="w-3 h-3" /> : <Clipboard className="w-3 h-3" />}
-            {copied ? 'Copied' : 'Copy JSON'}
           </button>
 
           <button
             onClick={() => setIsVerticalView(value => !value)}
             disabled={queryResult.length === 0}
             title={isVerticalView ? 'Switch to standard table view' : 'Switch to vertical table view'}
+            aria-label={isVerticalView ? 'Switch to standard table view' : 'Switch to vertical table view'}
             className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer disabled:cursor-not-allowed disabled:text-slate-600 disabled:border-slate-800 ${
               isVerticalView
                 ? 'bg-indigo-950/60 text-indigo-300 border-indigo-900 hover:bg-indigo-900'
@@ -173,7 +176,6 @@ export default function ResultGrid() {
             }`}
           >
             <ArrowRightLeft className="w-3 h-3" />
-            <span>{isVerticalView ? 'Horizontal View' : 'Vertical Table View'}</span>
           </button>
         </div>
       </div>
@@ -185,7 +187,7 @@ export default function ResultGrid() {
           <p className="text-xs text-slate-600 mt-1">Select a database store or type a query and click 'Run'.</p>
         </div>
       ) : (
-        <div className="flex-1 overflow-auto relative">
+        <div className="flex-1 min-h-0 overflow-auto relative">
           {isVerticalView ? (
             <table className="w-full text-left border-collapse font-mono text-xs text-slate-300 table-fixed min-w-[600px]">
               <thead className="bg-slate-900/80 sticky top-0 z-10 select-none border-b border-slate-800">
@@ -330,22 +332,21 @@ export default function ResultGrid() {
 
             <div className="px-5 py-3 bg-slate-950/40 border-t border-slate-800 flex items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2">
-                <button onClick={handleCopyRecord} className="px-3 py-1.5 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800 rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
+                <button onClick={handleCopyRecord} title="Copy JSON" aria-label="Copy JSON" className="px-2.5 py-1.5 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800 rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Clipboard className="w-3.5 h-3.5" />}
-                  {copied ? 'Copied' : 'Copy'}
                 </button>
-                <button onClick={() => setIsEditing(true)} disabled={isEditing} className="px-3 py-1.5 text-indigo-300 hover:text-white border border-indigo-900 hover:bg-indigo-950 rounded text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                  Edit
+                <button onClick={() => setIsEditing(true)} disabled={isEditing} title="Edit JSON" aria-label="Edit JSON" className="px-2.5 py-1.5 text-indigo-300 hover:text-white border border-indigo-900 hover:bg-indigo-950 rounded text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                  <Edit3 className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={handleJsonSave} disabled={!isEditing || isSaving} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold cursor-pointer disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed">
-                  {isSaving ? 'Saving...' : 'Save'}
+                <button onClick={handleJsonSave} disabled={!isEditing || isSaving} title={isSaving ? 'Saving...' : 'Save JSON'} aria-label={isSaving ? 'Saving JSON' : 'Save JSON'} className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold cursor-pointer disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed">
+                  <Save className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={handleDelete} className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900 text-red-300 hover:text-white border border-red-900/60 rounded text-xs font-semibold cursor-pointer">
-                  Delete
+                <button onClick={handleDelete} title="Delete record" aria-label="Delete record" className="px-2.5 py-1.5 bg-red-950/40 hover:bg-red-900 text-red-300 hover:text-white border border-red-900/60 rounded text-xs font-semibold cursor-pointer">
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <button onClick={closeJsonModal} className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-bold cursor-pointer">
-                Close
+              <button onClick={closeJsonModal} title="Close" aria-label="Close" className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-bold cursor-pointer">
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
