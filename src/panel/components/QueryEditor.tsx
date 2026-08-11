@@ -2,6 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Play, Sparkles, Save, Info, RefreshCw, Layers } from 'lucide-react';
 
+function getStoreNameFromQuery(query: string): string | null {
+  const match = query.match(/\bfrom\s+([^\s;]+)/i);
+  return match?.[1] || null;
+}
+
 export default function QueryEditor() {
   const {
     currentQuery,
@@ -32,7 +37,11 @@ export default function QueryEditor() {
   const activeDbMeta = databases.find(d => d.dbName === selectedDb);
   const storeNames = activeDbMeta?.stores.map(s => s.storeName) || [];
   const activeStoreMeta = activeDbMeta?.stores.find(s => s.storeName === selectedStore);
-  const fieldNames = activeStoreMeta?.fields || [];
+  const sourceStoreName = getStoreNameFromQuery(currentQuery);
+  const sourceStoreMeta = activeDbMeta?.stores.find(
+    store => store.storeName.toLowerCase() === sourceStoreName?.toLowerCase()
+  );
+  const fieldNames = sourceStoreMeta?.fields || activeStoreMeta?.fields || [];
 
   // Monitor clicks outside suggestions to close them
   useEffect(() => {
@@ -131,35 +140,36 @@ export default function QueryEditor() {
     const selectionStart = e.target.selectionStart;
     const beforeCursor = val.substring(0, selectionStart);
     
-    // Check what is right before the cursor for autocompletion
+    // Check what is right before the cursor for autocompletion.
     const lastWordMatch = beforeCursor.match(/[\w_]+$/);
     const lastWord = lastWordMatch ? lastWordMatch[0].toUpperCase() : '';
 
-    // Check if we just typed space after FROM
-    const fromMatch = beforeCursor.match(/\bfrom\s+$/i);
-    // Check if we just typed space after WHERE or ORDER BY or SELECT
-    const fieldTriggerMatch = beforeCursor.match(/\b(where|and|order by|select)\s+$/i);
-    // Check if we are currently typing a word after FROM
-    const typingStoreMatch = beforeCursor.match(/\bfrom\s+([\w_]+)$/i);
-    // Check if we are typing a field name
-    const typingFieldMatch = beforeCursor.match(/\b(where|and|order by|select)\s+.*?\b([\w_]+)$/i);
-
     let activeSuggestions: string[] = [];
+    const fromMatch = beforeCursor.match(/\bfrom\s+([^\s;]*)$/i);
 
     if (fromMatch) {
-      activeSuggestions = storeNames;
-    } else if (typingStoreMatch) {
-      const queryPart = typingStoreMatch[1].toLowerCase();
+      const queryPart = fromMatch[1].toLowerCase();
       activeSuggestions = storeNames.filter(name => name.toLowerCase().includes(queryPart));
-    } else if (fieldTriggerMatch) {
-      activeSuggestions = fieldNames;
-    } else if (typingFieldMatch) {
-      const queryPart = typingFieldMatch[2].toLowerCase();
-      activeSuggestions = fieldNames.filter(name => name.toLowerCase().includes(queryPart));
-    } else if (lastWord && lastWord.length >= 2) {
-      // Suggest SQL Keywords
-      const keywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'LIMIT', 'CONTAINS', 'LIKE', 'AND'];
-      activeSuggestions = keywords.filter(kw => kw.startsWith(lastWord) && kw !== lastWord);
+    } else {
+      // Use the last SQL clause before the cursor. The field list comes from
+      // the table named in FROM, even when the toolbar table is different.
+      const clauseMatch = beforeCursor.match(/\b(select|where|and|order\s+by)\b([\s\S]*)$/i);
+      if (clauseMatch) {
+        const clauseText = clauseMatch[2];
+        const hasOperator = /(?:<=|>=|!=|=|>|<|\bcontains\b|\blike\b)/i.test(clauseText);
+        const hasLaterClause = /\b(from|limit)\b/i.test(clauseText);
+        const fieldTokenMatch = clauseText.match(/[\w_]*$/);
+        const fieldToken = fieldTokenMatch?.[0]?.toLowerCase() || '';
+
+        if (!hasOperator && !hasLaterClause) {
+          activeSuggestions = fieldNames.filter(name => name.toLowerCase().includes(fieldToken));
+        }
+      }
+
+      if (activeSuggestions.length === 0 && lastWord && lastWord.length >= 2) {
+        const keywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'LIMIT', 'CONTAINS', 'LIKE', 'AND'];
+        activeSuggestions = keywords.filter(kw => kw.startsWith(lastWord) && kw !== lastWord);
+      }
     }
 
     if (activeSuggestions.length > 0) {
@@ -213,9 +223,10 @@ export default function QueryEditor() {
       }
     }, 10);
 
-    // If a store name was selected, auto-select it in metadata state too
-    if (storeNames.includes(suggestion)) {
-      setSelectedStore(suggestion);
+    // If a store name was selected, auto-select it in metadata state too.
+    const selectedStoreMatch = storeNames.find(name => name.toLowerCase() === suggestion.toLowerCase());
+    if (selectedStoreMatch) {
+      setSelectedStore(selectedStoreMatch);
     }
   };
 

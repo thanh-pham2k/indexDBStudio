@@ -3,12 +3,11 @@ import { useAppStore } from './panel/store/useAppStore';
 import Toolbar from './panel/components/Toolbar';
 import QueryEditor from './panel/components/QueryEditor';
 import ResultGrid from './panel/components/ResultGrid';
-import JsonDetailPanel from './panel/components/JsonDetailPanel';
 import StatusBar from './panel/components/StatusBar';
-import { Terminal, Database, BookOpen, Bookmark } from 'lucide-react';
+import { Terminal, Bookmark } from 'lucide-react';
 
 export default function App() {
-  const { refreshMetadata, savedQueries, currentQuery, setCurrentQuery, runQuery, layoutMode } = useAppStore();
+  const { refreshMetadata, savedQueries, setCurrentQuery } = useAppStore();
 
   useEffect(() => {
     // Initial scan and demo database seeding
@@ -71,13 +70,9 @@ export default function App() {
       {/* SQL Script / Query Area */}
       <QueryEditor />
 
-      {/* Main Workspace: Table Grid + Side inspection details */}
-      <main className={`flex-1 flex gap-3 min-h-0 min-w-0 ${layoutMode === 'vertical' ? 'flex-col' : 'flex-row'}`}>
-        {/* Dynamic query result table */}
+      {/* Main Workspace: query result table */}
+      <main className="flex-1 flex min-h-0 min-w-0">
         <ResultGrid />
-
-        {/* Selected row details & rollback sidebar */}
-        <JsonDetailPanel />
       </main>
 
       {/* Footer / Dev status info */}

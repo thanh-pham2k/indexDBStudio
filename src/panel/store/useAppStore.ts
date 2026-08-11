@@ -24,8 +24,8 @@ interface AppStoreState {
   setCurrentQuery: (query: string) => void;
   runQuery: () => Promise<void>;
   updateCellInStore: (row: GridRow, fieldName: string, value: any) => Promise<void>;
-  updateRecordInStore: (row: GridRow, value: Record<string, any>) => Promise<void>;
-  deleteRecordInStore: (row: GridRow) => Promise<void>;
+  updateRecordInStore: (row: GridRow, value: Record<string, any>) => Promise<boolean>;
+  deleteRecordInStore: (row: GridRow) => Promise<boolean>;
   addRecordToStore: (storeName: string, value: Record<string, any>) => Promise<void>;
   setSelectedRow: (row: GridRow | null) => void;
   saveQuery: (name: string) => void;
@@ -199,8 +199,10 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       // 4. Re-run current query to show updated data
       await get().runQuery();
       await get().refreshMetadata();
+      return true;
     } catch (e: any) {
       set({ error: `Update Failed: ${e.message}` });
+      return false;
     }
   },
 
@@ -220,8 +222,10 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
       // 4. Re-run current query
       await get().runQuery();
       await get().refreshMetadata();
+      return true;
     } catch (e: any) {
       set({ error: `Deletion Failed: ${e.message}` });
+      return false;
     }
   },
 

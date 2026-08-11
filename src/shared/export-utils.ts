@@ -33,9 +33,12 @@ export function downloadFile(content: string, filename: string, contentType: str
  * Exports the query results as JSON.
  * It unwraps the underlying IndexedDB object values.
  */
+export function serializeRowsAsJSON(rows: GridRow[]): string {
+  return JSON.stringify(rows.map(row => row.__value), null, 2);
+}
+
 export function exportToJSON(rows: GridRow[], queryName: string = 'result'): void {
-  const payload = rows.map(r => r.__value);
-  const jsonStr = JSON.stringify(payload, null, 2);
+  const jsonStr = serializeRowsAsJSON(rows);
   const filename = `indexeddb-${queryName}-${getFormattedTimestamp()}.json`;
   downloadFile(jsonStr, filename, 'application/json;charset=utf-8;');
 }

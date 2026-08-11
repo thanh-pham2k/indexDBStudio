@@ -4,21 +4,13 @@ import { exportToJSON, exportToCSV } from '../../shared/export-utils';
 import {
   Database,
   RefreshCw,
-  Sparkles,
   Download,
-  Info,
   HelpCircle,
   Chrome,
   Terminal,
-  Layers,
   Search,
   BookOpen,
-  ArrowRight,
-  ClipboardCheck,
-  Check,
-  X,
-  Columns,
-  Rows
+  X
 } from 'lucide-react';
 
 export default function Toolbar() {
@@ -28,24 +20,21 @@ export default function Toolbar() {
     setSelectedDb,
     selectedStore,
     setSelectedStore,
-    currentQuery,
-    setCurrentQuery,
     refreshMetadata,
-    runQuery,
     queryResult,
-    savedQueries,
-    deleteSavedQuery,
-    isMetaLoading,
-    layoutMode,
-    toggleLayoutMode
+    isMetaLoading
   } = useAppStore();
 
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showExtensionModal, setShowExtensionModal] = useState(false);
   const [copiedTextId, setCopiedTextId] = useState<string | null>(null);
+  const [storeSearch, setStoreSearch] = useState('');
 
   const activeDbMeta = databases.find(d => d.dbName === selectedDb);
   const stores = activeDbMeta?.stores || [];
+  const filteredStores = stores.filter(store =>
+    store.storeName.toLowerCase().includes(storeSearch.trim().toLowerCase())
+  );
 
   const handleExportJSON = () => {
     if (queryResult.length === 0) return;
@@ -117,7 +106,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             id="db-select-dropdown"
             className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono"
             value={selectedDb}
-            onChange={e => setSelectedDb(e.target.value)}
+            onChange={e => {
+              setStoreSearch('');
+              setSelectedDb(e.target.value);
+            }}
           >
             {databases.map(db => (
               <option key={db.dbName} value={db.dbName}>
@@ -127,17 +119,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           </select>
         </div>
 
-        {/* Store selection */}
+        {/* Store selection and search */}
         {stores.length > 0 && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <span className="text-slate-500 font-mono text-xs">/</span>
+            <div className="relative flex items-center">
+              <Search className="absolute left-2 w-3 h-3 text-slate-500 pointer-events-none" />
+              <input
+                id="store-search-input"
+                type="search"
+                value={storeSearch}
+                onChange={e => setStoreSearch(e.target.value)}
+                placeholder="Search table..."
+                aria-label="Search tables in the selected database"
+                className="w-32 bg-slate-950 border border-slate-800 rounded pl-6 pr-2 py-1 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono placeholder:text-slate-600"
+              />
+            </div>
             <select
               id="store-select-dropdown"
               className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-indigo-300 outline-none focus:border-indigo-500 font-mono"
               value={selectedStore}
               onChange={e => setSelectedStore(e.target.value)}
             >
-              {stores.map(store => (
+              {filteredStores.map(store => (
                 <option key={store.storeName} value={store.storeName}>
                   {store.storeName} ({store.count} rows)
                 </option>
@@ -194,25 +198,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         >
           <Chrome className="w-3.5 h-3.5 text-indigo-400" />
           Extension Hub
-        </button>
-
-        {/* Toggle Layout Mode Button */}
-        <button
-          onClick={toggleLayoutMode}
-          title={layoutMode === 'vertical' ? "Switch to Side-by-Side View" : "Switch to Vertical Stacked View"}
-          className="px-2.5 py-1 rounded text-xs font-semibold bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-800 transition flex items-center gap-1.5 cursor-pointer"
-        >
-          {layoutMode === 'vertical' ? (
-            <>
-              <Columns className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Side-by-Side</span>
-            </>
-          ) : (
-            <>
-              <Rows className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Vertical Stack</span>
-            </>
-          )}
         </button>
 
         {/* Help Info Button */}
